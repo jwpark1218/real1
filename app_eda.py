@@ -287,24 +287,18 @@ class EDA:
         # 3. 지역별 분석
         with tabs[2]:
             st.header("3. Region-wise Population Change")
-
-            # Exclude '전국' and map Korean region names to English
-            region_map = {
-                '서울':'Seoul','부산':'Busan','대구':'Daegu','인천':'Incheon',
-                '광주':'Gwangju','대전':'Daejeon','울산':'Ulsan','세종':'Sejong',
-                '경기':'Gyeonggi','강원':'Gangwon','충북':'Chungbuk','충남':'Chungnam',
-                '전북':'Jeonbuk','전남':'Jeonnam','경북':'Gyeongbuk','경남':'Gyeongnam','제주':'Jeju'
-            }
+            # Exclude '전국' and map names
+            region_map = { ... }
             recent_year = df['연도'].max()
             past_year = recent_year - 5
-
             region_df = df[df['지역'] != '전국']
-            pop_first = region_df[region_df['연도'] == past_year][['지역','인구']].set_index('지역')
-            pop_last  = region_df[region_df['연도'] == recent_year][['지역','인구']].set_index('지역')
+            pop_first = region_df[region_df['연도'] == past_year].set_index('지역')['인구']
+            pop_last = region_df[region_df['연도'] == recent_year].set_index('지역')['인구']
 
             # Calculate absolute change
-            change = (pop_last['인구'] - pop_first['인구']).dropna()
-            change_df = change.reset_index().rename(columns={0:'change'}) if isinstance(change, pd.Series) else change.reset_index(name='change')
+            change = (pop_last - pop_first).dropna()
+            # Fix: reset_index with name to ensure correct column
+            change_df = change.reset_index(name='change')
             change_df['change_thousand'] = change_df['change'] / 1000
             change_df['region_en'] = change_df['지역'].map(region_map)
             change_df = change_df.sort_values('change_thousand', ascending=False)
@@ -319,23 +313,6 @@ class EDA:
             ax.set_ylabel("")
             st.pyplot(fig)
             st.write("This chart shows the absolute population change over the last five years for each region (in thousands). Regions are sorted from highest to lowest change.")
-
-            # Calculate percentage change
-            pct_change = ((pop_last['인구'] - pop_first['인구']) / pop_first['인구'] * 100).dropna()
-            pct_df = pct_change.reset_index().rename(columns={0:'pct_change'}) if isinstance(pct_change, pd.Series) else pct_change.reset_index(name='pct_change')
-            pct_df['region_en'] = pct_df['지역'].map(region_map)
-            pct_df = pct_df.sort_values('pct_change', ascending=False)
-
-            # Plot percentage change
-            fig2, ax2 = plt.subplots()
-            sns.barplot(x='pct_change', y='region_en', data=pct_df, ax=ax2)
-            for i, v in enumerate(pct_df['pct_change']):
-                ax2.text(v, i, f"{v:.1f}%", va='center')
-            ax2.set_title("5-Year Population Change Rate by Region")
-            ax2.set_xlabel("Change Rate (%)")
-            ax2.set_ylabel("")
-            st.pyplot(fig2)
-            st.write("This chart displays the percentage population change relative to the population five years ago for each region. Regions are sorted from highest to lowest rate.")
 
 
         # 4. 변화량 분석
