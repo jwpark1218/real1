@@ -286,37 +286,117 @@ class EDA:
 
         # 3. 지역별 분석
         with tabs[2]:
-            st.header("3. 지역별 인구 분석")
-            latest_year = df["연도"].max()
-            latest_df = df[df["연도"] == latest_year][["지역", "인구"]]
-            ranking = latest_df.sort_values("인구", ascending=False)
-            st.subheader(f"{latest_year}년 지역별 인구 순위")
-            st.dataframe(ranking.reset_index(drop=True))
+            st.header("3. Region-wise Population Change")
+
+            # Exclude '전국' and map Korean region names to English
+            region_map = {
+                '서울':'Seoul','부산':'Busan','대구':'Daegu','인천':'Incheon',
+                '광주':'Gwangju','대전':'Daejeon','울산':'Ulsan','세종':'Sejong',
+                '경기':'Gyeonggi','강원':'Gangwon','충북':'Chungbuk','충남':'Chungnam',
+                '전북':'Jeonbuk','전남':'Jeonnam','경북':'Gyeongbuk','경남':'Gyeongnam','제주':'Jeju'
+            }
+            recent_year = df['연도'].max()
+            past_year = recent_year - 5
+
+            region_df = df[df['지역'] != '전국']
+            pop_first = region_df[region_df['연도'] == past_year][['지역','인구']].set_index('지역')
+            pop_last  = region_df[region_df['연도'] == recent_year][['지역','인구']].set_index('지역')
+
+            # Calculate absolute change
+            change = (pop_last['인구'] - pop_first['인구']).dropna()
+            change_df = change.reset_index().rename(columns={0:'change'}) if isinstance(change, pd.Series) else change.reset_index(name='change')
+            change_df['change_thousand'] = change_df['change'] / 1000
+            change_df['region_en'] = change_df['지역'].map(region_map)
+            change_df = change_df.sort_values('change_thousand', ascending=False)
+
+            # Plot absolute change
+            fig, ax = plt.subplots()
+            sns.barplot(x='change_thousand', y='region_en', data=change_df, ax=ax)
+            for i, v in enumerate(change_df['change_thousand']):
+                ax.text(v, i, f"{v:.1f}", va='center')
+            ax.set_title("5-Year Population Change by Region")
+            ax.set_xlabel("Change (Thousands)")
+            ax.set_ylabel("")
+            st.pyplot(fig)
+            st.write("This chart shows the absolute population change over the last five years for each region (in thousands). Regions are sorted from highest to lowest change.")
+
+            # Calculate percentage change
+            pct_change = ((pop_last['인구'] - pop_first['인구']) / pop_first['인구'] * 100).dropna()
+            pct_df = pct_change.reset_index().rename(columns={0:'pct_change'}) if isinstance(pct_change, pd.Series) else pct_change.reset_index(name='pct_change')
+            pct_df['region_en'] = pct_df['지역'].map(region_map)
+            pct_df = pct_df.sort_values('pct_change', ascending=False)
+
+            # Plot percentage change
+            fig2, ax2 = plt.subplots()
+            sns.barplot(x='pct_change', y='region_en', data=pct_df, ax=ax2)
+            for i, v in enumerate(pct_df['pct_change']):
+                ax2.text(v, i, f"{v:.1f}%", va='center')
+            ax2.set_title("5-Year Population Change Rate by Region")
+            ax2.set_xlabel("Change Rate (%)")
+            ax2.set_ylabel("")
+            st.pyplot(fig2)
+            st.write("This chart displays the percentage population change relative to the population five years ago for each region. Regions are sorted from highest to lowest rate.")
+
 
         # 4. 변화량 분석
         with tabs[3]:
-            st.header("4. 지역별 변화량 분석")
-            df_sorted = df.sort_values(["지역", "연도"])
-            df_sorted["변화량"] = df_sorted.groupby("지역")["인구"].diff()
-            df_sorted["증감률"] = df_sorted.groupby("지역")["인구"].pct_change() * 100
+            st.header("4. Top 100 Population Changes")
+            # Exclude nationwide data
+        df_change = df[df['지역'] != '전국'].sort_values(['지역', '연도'])
+        # Compute year-over-year difference
+        df_change['change'] = df_change.groupby('지역')['인구'].diff()
+        df_change = df_change.dropna()
 
-            top_change = df_sorted.dropna().sort_values("변화량", ascending=False).head(10)
-            st.subheader("인구 변화량 상위 10")
-            st.dataframe(top_change[["연도", "지역", "변화량"]].reset_index(drop=True))
+        # Select top 100 cases by absolute change
+        top100 = df_change.sort_values('change', ascending=False).head(100)[['연도', '지역', 'change']]
+        # Format numbers with thousand separators
+        top100['change'] = top100['change'].astype(int).map(lambda x: f"{x:,}")
 
-            st.subheader("인구 증감률 상위 10")
-            st.dataframe(top_change[["연도", "지역", "증감률"]].round(2).reset_index(drop=True))
+        # Style with color gradient: increases in blue, decreases in red
+        styled = top100.style.background_gradient(cmap='RdBu', subset=['change'])
+
+        # Display table
+        st.dataframe(styled)
+        st.write("Top 100 year-over-year population changes across regions (excluding nationwide). Blue indicates positive growth, red indicates decline.")
 
         # 5. 시각화
         with tabs[4]:
-            st.header("5. 누적 영역 그래프")
-            area_df = df.pivot(index="연도", columns="지역", values="인구")
-            fig, ax = plt.subplots()
-            area_df.plot.area(ax=ax)
-            ax.set_title("지역별 인구 누적 영역 그래프")
-            ax.set_xlabel("연도")
-            ax.set_ylabel("인구")
+            # 5. Stacked Area Chart for Population by Region
+            st.header("5. Population by Region Over Years")
+
+            # Exclude nationwide and pivot
+            subset = df[df['지역'] != '전국'][['연도', '지역', '인구']]
+            pivot = subset.pivot(index='연도', columns='지역', values='인구')
+
+            # Map Korean region names to English
+            region_map = {
+                '서울':'Seoul','부산':'Busan','대구':'Daegu','인천':'Incheon',
+                '광주':'Gwangju','대전':'Daejeon','울산':'Ulsan','세종':'Sejong',
+                '경기':'Gyeonggi','강원':'Gangwon','충북':'Chungbuk','충남':'Chungnam',
+                '전북':'Jeonbuk','전남':'Jeonnam','경북':'Gyeongbuk','경남':'Gyeongnam','제주':'Jeju'
+            }
+            pivot.rename(columns=region_map, inplace=True)
+
+            # Prepare colors
+            colors = sns.color_palette('tab20', n_colors=pivot.shape[1])
+
+            # Plot stacked area
+            fig, ax = plt.subplots(figsize=(10, 6))
+            pivot.plot.area(ax=ax, color=colors)
+            ax.set_title("Population Trends by Region")
+            ax.set_xlabel("Year")
+            ax.set_ylabel("Population")
+            ax.legend(title="Region", bbox_to_anchor=(1.05, 1), loc='upper left')
             st.pyplot(fig)
+
+            # Optional: Heatmap visualization
+            st.header("Population Heatmap by Region and Year")
+            fig2, ax2 = plt.subplots(figsize=(10, 6))
+            sns.heatmap(pivot.T, cmap='YlGnBu', annot=False, cbar_kws={'label': 'Population'})
+            ax2.set_xlabel("Year")
+            ax2.set_ylabel("Region")
+            st.pyplot(fig2)
+
 
 # ---------------------
 # 페이지 객체 생성
