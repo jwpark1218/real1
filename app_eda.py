@@ -207,6 +207,24 @@ class EDA:
 
         df = pd.read_csv(uploaded)
 
+        # ----- 기본 전처리 -----
+        # '세종' 지역의 모든 '-' 결측치를 0으로 치환
+        sejong_mask = df['지역'] == '세종'
+        df.loc[sejong_mask] = df.loc[sejong_mask].replace('-', 0)
+        # 숫자형 변환
+        for col in ['인구', '출생아수(명)', '사망자수(명)']:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
+        # ----- 전처리 후 요약 분석 -----
+        st.header("데이터프레임 구조 (df.info())")
+        buf = io.StringIO()
+        df.info(buf=buf)
+        st.text(buf.getvalue())
+
+        st.header("기초 통계량 (df.describe())")
+        st.dataframe(df.describe())
+
+
         tabs = st.tabs([
             "1. 기초 통계",
             "2. 연도별 추이",
@@ -235,14 +253,36 @@ class EDA:
 
         # 2. 연도별 추이
         with tabs[1]:
-            st.header("2. 연도별 전체 인구 추이")
-            pop_year = df.groupby("연도")["인구"].sum().reset_index()
+            st.header("2. Yearly Population Trend")
+            national_df = df[df['지역'] == '전국'][['연도', '인구', '출생아수(명)', '사망자수(명)']]
+            national_df = national_df.sort_values('연도')
+
+            years = national_df['연도'].values
+            population = national_df['인구'].values
+
+            # Plot historical trend
             fig, ax = plt.subplots()
-            sns.lineplot(x="연도", y="인구", data=pop_year, marker="o", ax=ax)
-            ax.set_title("연도별 전체 인구 추이")
-            ax.set_xlabel("연도")
-            ax.set_ylabel("인구")
+            ax.plot(years, population, marker='o', linestyle='-')
+            ax.set_title("Population Trend")
+            ax.set_xlabel("Year")
+            ax.set_ylabel("Population")
+
+            # Predict 2035 population using recent 3-year net change
+            recent = national_df.tail(3)
+            net_changes = recent['출생아수(명)'] - recent['사망자수(명)']
+            avg_net = net_changes.mean()
+            last_year = int(years[-1])
+            last_pop = int(population[-1])
+            delta_years = 2035 - last_year
+            predicted_pop_2035 = last_pop + avg_net * delta_years
+
+            # Plot prediction
+            ax.scatter(2035, predicted_pop_2035, color='red')
+            ax.text(2035, predicted_pop_2035, f"2035: {int(predicted_pop_2035):,}",
+                    va='bottom', ha='right')
+
             st.pyplot(fig)
+
 
         # 3. 지역별 분석
         with tabs[2]:
