@@ -359,7 +359,7 @@ class EDA:
         st.dataframe(styled)
         st.write("Top 100 year-over-year population changes across regions (excluding nationwide). Blue indicates positive growth, red indicates decline.")
 
-        # 5. 시각화
+         # 5. 시각화
         with tabs[4]:
             # 5. Stacked Area Chart for Population by Region
             st.header("5. Population by Region Over Years")
@@ -396,7 +396,6 @@ class EDA:
             ax2.set_xlabel("Year")
             ax2.set_ylabel("Region")
             st.pyplot(fig2)
-
 
 # ---------------------
 # 페이지 객체 생성
